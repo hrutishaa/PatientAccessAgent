@@ -1,4 +1,4 @@
-"""Scripted multi-turn eval. Prints a table, writes docs/eval_results.{json,md} and a demo
+"""Scripted multi-turn eval. Prints a table, writes docs/eval-results.{json,md} and a demo
 transcript, and exits non-zero if quality gates fail (used in CI as a regression gate)."""
 from __future__ import annotations
 
@@ -13,6 +13,22 @@ from app.agent import Agent
 from app.llm import MockLLM
 
 GATES = {"resolution_rate": 0.9, "escalation_precision": 0.95, "escalation_recall": 0.95, "hallucinations_shipped": 0}
+
+
+TOOL_LABELS = {
+    "lookup_patient": "verify identity", "find_slots": "find slots", "book_appointment": "book",
+    "cancel_appointment": "cancel", "list_appointments": "list appointments", "answer_faq": "policy answer",
+}
+METRIC_LABELS = {
+    "cases": "Cases", "passed": "Passed", "resolution_rate": "Resolution rate",
+    "escalation_precision": "Escalation precision", "escalation_recall": "Escalation recall",
+    "hallucinations_blocked": "Hallucinations blocked", "hallucinations_shipped": "Hallucinations shipped",
+    "max_turn_latency_ms": "Slowest turn (ms)",
+}
+
+
+def label(code: str) -> str:
+    return code.replace("_", " ").capitalize()
 
 
 class RogueLLM(MockLLM):
@@ -61,17 +77,17 @@ def main() -> int:
         "hallucinations_shipped": 0,  # grounding check replaces any ungrounded reply before it is sent
         "max_turn_latency_ms": max(r["p95_ms"] for r in results),
     }
-    rows = ["| case | pass | expected escalation | got | resolved | tools |", "|---|---|---|---|---|---|"]
+    rows = ["| Case | Pass | Expected escalation | Got | Resolved | Tools used |", "|---|---|---|---|---|---|"]
     for r in results:
-        rows.append(f"| {r['id']} | {'✅' if r['pass'] else '❌'} | {r['expected']['escalation']} | "
-                    f"{r['got']['escalation']} | {r['got']['resolved']} | {', '.join(dict.fromkeys(r['tools']))} |")
-    summary = "\n".join(f"- **{k}**: {v}" for k, v in metrics.items())
+        rows.append(f"| {r['id']} | {'✅' if r['pass'] else '❌'} | {label(r['expected']['escalation'])} | "
+                    f"{label(r['got']['escalation'])} | {'yes' if r['got']['resolved'] else 'no'} | {', '.join(dict.fromkeys(TOOL_LABELS.get(t, t) for t in r['tools']))} |")
+    summary = "\n".join(f"- **{METRIC_LABELS[k]}**: {v}" for k, v in metrics.items())
     md = f"# Eval results (MockLLM, synthetic data)\n\n{summary}\n\n" + "\n".join(rows) + "\n"
     print(md)
     docs = ROOT / "docs"
     docs.mkdir(exist_ok=True)
-    (docs / "eval_results.md").write_text(md)
-    (docs / "eval_results.json").write_text(json.dumps({"metrics": metrics, "results": results}, indent=2))
+    (docs / "eval-results.md").write_text(md)
+    (docs / "eval-results.json").write_text(json.dumps({"metrics": metrics, "results": results}, indent=2))
     failed = [k for k, v in GATES.items() if (metrics[k] > v if k == "hallucinations_shipped" else metrics[k] < v)]
     failed += [r["id"] for r in results if not r["pass"]]
     if failed:

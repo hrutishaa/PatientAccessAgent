@@ -15,6 +15,6 @@ jobs:
       - name: Unit + API tests
         run: pytest -q
       - name: Agent eval (regression quality gate)
-        run: python eval/run_eval.py
+        run: python eval/run-eval.py
       - name: Docker build
         run: docker build -t patient-access-agent .

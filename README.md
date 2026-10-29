@@ -1,6 +1,6 @@
 # Patient Access Agent
 
-[![CI](https://github.com/hrutishaa/patient-access-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/hrutishaa/patient-access-agent/actions/workflows/ci.yml)
+[![CI](https://github.com/hrutishaa/PatientAccessAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/hrutishaa/PatientAccessAgent/actions/workflows/ci.yml)
 
 A production-style **AI voice + chat agent for hospital patient access**: it verifies a caller's identity,
 finds open slots, books and cancels appointments through a **FHIR R4** API, answers clinic-policy
@@ -10,7 +10,7 @@ questions with retrieval (RAG), and **hands off to a human** whenever it should.
 > any hospital and has never touched real PHI. The FHIR server is a mock shaped like Epic's FHIR scheduling
 > APIs so the integration layer can be swapped for a real sandbox (e.g. Epic on FHIR / open.epic) later.
 
-**Live demo (static):** https://hrutishaa.github.io/patient-access-agent/ (transcripts + eval results)
+**Live demo (static):** https://hrutishaa.github.io/PatientAccessAgent/ (transcripts + eval results)
 
 ## What it does
 | Capability | Where |
@@ -20,7 +20,7 @@ questions with retrieval (RAG), and **hands off to a human** whenever it should.
 | Append-only **audit log** of every PHI access, patient ids pseudonymized | `app/audit.py` |
 | Mock **FHIR R4** Patient / Practitioner / Slot / Appointment with `$book` and `$cancel` | `app/fhir/` |
 | Tool-calling agent loop (OpenAI-compatible) + deterministic **offline MockLLM** | `app/agent.py`, `app/llm.py` |
-| Tools: `lookup_patient` (identity verification), `find_slots`, `book_appointment`, `cancel_appointment`, `list_appointments`, `answer_faq` (RAG) | `app/tools.py` |
+| Tools: verify identity, find slots, book, cancel, list appointments, and policy answers (RAG) | `app/tools.py` |
 | Safe escalation: emergency → "call 911", clinical → nurse, user asks for human, low confidence, repeated failure | `app/escalation.py` |
 | Guardrails: Pydantic tool args, **grounding check** (no time/id/clinician the tools didn't return), prompt-injection filter | `app/guardrails.py` |
 | Voice channel: `/voice` webhook (HMAC-signed), transcript in → SSML out, pluggable for Twilio / Cisco / ElevenLabs | `app/voice.py` |
@@ -52,10 +52,10 @@ writes audit → LLM writes reply from tool output → grounding check → reply
 ## Design decisions
 - **Rules before the model for safety.** Emergency and clinical-advice detection is deterministic and tested.
   A model can add nuance later, but it can never *remove* an escalation.
-- **Identity before PHI.** No patient tool runs until `lookup_patient` matches first name + last name + DOB
-  exactly. Tools also re-check that the `patient_id` belongs to *this* session, so a model cannot be talked into
+- **Identity before PHI.** No patient tool runs until the identity check matches first name + last name + DOB
+  exactly. Tools also re-check that the patient ID belongs to *this* session, so a model cannot be talked into
   reading someone else's record. Logged-in patients are bound to their own record.
-- **Minimum necessary.** `lookup_patient` returns only id + first name to the model, not phone/MRN.
+- **Minimum necessary.** The identity check returns only id + first name to the model, not phone/MRN.
 - **Grounding check.** Every appointment fact the agent says (date/time, confirmation id, clinician) must have
   come back from a tool this session; otherwise the reply is replaced and the conversation is handed off.
 - **Offline MockLLM.** Tests, eval and the demo run with no API key and give identical results every time;
@@ -89,7 +89,7 @@ python -m venv .venv && . .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env   # set JWT_SECRET etc.
 pytest -q                 # 44 tests
-python eval/run_eval.py   # prints the eval table, writes docs/eval_results.md
+python eval/run-eval.py   # prints the eval table, writes docs/eval-results.md
 uvicorn app.main:app --reload
 ```
 ```bash
@@ -97,13 +97,13 @@ TOKEN=$(curl -s -X POST localhost:8000/token -d 'username=frontdesk&password=syn
 curl -s localhost:8000/chat -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"message":"Book a cardiology visit. My name is Jordan Rivera, DOB 04/12/1985"}' | jq
 ```
-Docker: `docker build -t paa . && docker run -p 8000:8000 -e JWT_SECRET=dev paa`
+Docker: `docker build -t patient-access-agent . && docker run -p 8000:8000 -e JWT_SECRET=dev paa`
 
 Synthetic patients: Jordan Rivera 1985-04-12, Ava Thompson 1992-11-03, Marcus Lee 1978-07-21.
 Demo users: `jordan` (patient), `frontdesk` (staff), `admin` (admin); password = `DEMO_PASSWORD`.
 
 ## Eval
-See [`docs/eval_results.md`](docs/eval_results.md). Metrics: resolution rate (task conversations that end
+See [`docs/eval-results.md`](docs/eval-results.md). Metrics: resolution rate (task conversations that end
 resolved), escalation precision/recall, hallucinations blocked by the grounding check (a "rogue" model case
 proves the check works), max turn latency. CI fails if any gate drops.
 

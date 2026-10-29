@@ -11,21 +11,23 @@ td,th{border-bottom:1px solid #e3e7ee;padding:.3rem;text-align:left}
 </style></head><body>
 <h1>Patient Access Agent</h1>
 <p class="sub">AI scheduling agent for chat + voice over a FHIR R4 API. Synthetic data only, not deployed at any hospital.
-<a href="https://github.com/hrutishaa/patient-access-agent">Source on GitHub</a></p>
+<a href="https://github.com/hrutishaa/PatientAccessAgent">Source on GitHub</a></p>
 <div class="card"><h2>Eval results</h2><div class="metrics" id="metrics"></div></div>
 <div class="card"><h2>Conversation transcripts</h2>
 <label>Scenario: <select id="pick"></select></label><div id="chat"></div></div>
 <div class="card"><h2>All cases</h2><table id="tbl"></table></div>
 <script>
-fetch('eval_results.json').then(r=>r.json()).then(d=>{
+const TOOLS={lookup_patient:'verify identity',find_slots:'find slots',book_appointment:'book',cancel_appointment:'cancel',list_appointments:'list appointments',answer_faq:'policy answer'};
+const lab=c=>{const t=c.replace(/_/g,' ');return t.charAt(0).toUpperCase()+t.slice(1)};
+fetch('eval-results.json').then(r=>r.json()).then(d=>{
  const M=d.metrics, show={resolution_rate:'Resolution rate',escalation_precision:'Escalation precision',escalation_recall:'Escalation recall',hallucinations_blocked:'Hallucinations blocked',hallucinations_shipped:'Hallucinations shipped',passed:'Cases passed'};
  document.getElementById('metrics').innerHTML=Object.entries(show).map(([k,l])=>`<div class="m">${l}<b>${k.includes('rate')||k.includes('prec')||k.includes('recall')?Math.round(M[k]*100)+'%':(k=='passed'?M.passed+'/'+M.cases:M[k])}</b></div>`).join('');
  const pick=document.getElementById('pick');
  d.results.forEach((r,i)=>pick.add(new Option(r.id,i)));
  const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
  const draw=()=>{const r=d.results[pick.value];document.getElementById('chat').innerHTML=r.transcript.map(t=>
-  `<div class="u">${esc(t.user)}</div><div class="a">${esc(t.agent)}<div class="meta">tools: ${t.tools.join(', ')||'none'} · ${t.latency_ms} ms ${t.escalation!='none'?'· <span class="esc">escalation: '+t.escalation+'</span>':''}</div></div>`).join('')};
+  `<div class="u">${esc(t.user)}</div><div class="a">${esc(t.agent)}<div class="meta">tools: ${t.tools.map(x=>TOOLS[x]||x).join(', ')||'none'} · ${t.latency_ms} ms ${t.escalation!='none'?'· <span class="esc">escalation: '+t.escalation+'</span>':''}</div></div>`).join('')};
  pick.onchange=draw;draw();
- document.getElementById('tbl').innerHTML='<tr><th>Case</th><th>Pass</th><th>Expected</th><th>Got</th><th>Resolved</th></tr>'+d.results.map(r=>`<tr><td>${r.id}</td><td>${r.pass?'✅':'❌'}</td><td>${r.expected.escalation}</td><td>${r.got.escalation}</td><td>${r.got.resolved}</td></tr>`).join('');
+ document.getElementById('tbl').innerHTML='<tr><th>Case</th><th>Pass</th><th>Expected</th><th>Got</th><th>Resolved</th></tr>'+d.results.map(r=>`<tr><td>${r.id}</td><td>${r.pass?'✅':'❌'}</td><td>${lab(r.expected.escalation)}</td><td>${lab(r.got.escalation)}</td><td>${r.got.resolved?'yes':'no'}</td></tr>`).join('');
 });
 </script></body></html>
