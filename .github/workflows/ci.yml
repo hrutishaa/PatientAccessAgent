@@ -1,0 +1,20 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      JWT_SECRET: ci-only-not-a-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Unit + API tests
+        run: pytest -q
+      - name: Agent eval (regression quality gate)
+        run: python eval/run_eval.py
+      - name: Docker build
+        run: docker build -t patient-access-agent .

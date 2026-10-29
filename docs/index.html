@@ -1,0 +1,31 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Patient Access Agent — demo</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:900px;margin:2rem auto;padding:0 1rem;color:#1b2430;background:#f6f8fb}
+h1{margin-bottom:.2rem}.sub{color:#5a6573}.card{background:#fff;border-radius:12px;padding:1rem 1.2rem;margin:1rem 0;box-shadow:0 1px 3px #0001}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem}.m{background:#eef4ff;border-radius:8px;padding:.6rem}
+.m b{display:block;font-size:1.4rem}.u,.a{padding:.5rem .8rem;border-radius:10px;margin:.35rem 0;max-width:80%}
+.u{background:#0b5cad;color:#fff;margin-left:auto}.a{background:#eef1f5}.meta{font-size:.75rem;color:#6b7684}
+.esc{color:#b3261e;font-weight:600}select{padding:.3rem;font-size:1rem}table{border-collapse:collapse;width:100%;font-size:.85rem}
+td,th{border-bottom:1px solid #e3e7ee;padding:.3rem;text-align:left}
+</style></head><body>
+<h1>Patient Access Agent</h1>
+<p class="sub">AI scheduling agent for chat + voice over a FHIR R4 API. Synthetic data only, not deployed at any hospital.
+<a href="https://github.com/hrutishaa/patient-access-agent">Source on GitHub</a></p>
+<div class="card"><h2>Eval results</h2><div class="metrics" id="metrics"></div></div>
+<div class="card"><h2>Conversation transcripts</h2>
+<label>Scenario: <select id="pick"></select></label><div id="chat"></div></div>
+<div class="card"><h2>All cases</h2><table id="tbl"></table></div>
+<script>
+fetch('eval_results.json').then(r=>r.json()).then(d=>{
+ const M=d.metrics, show={resolution_rate:'Resolution rate',escalation_precision:'Escalation precision',escalation_recall:'Escalation recall',hallucinations_blocked:'Hallucinations blocked',hallucinations_shipped:'Hallucinations shipped',passed:'Cases passed'};
+ document.getElementById('metrics').innerHTML=Object.entries(show).map(([k,l])=>`<div class="m">${l}<b>${k.includes('rate')||k.includes('prec')||k.includes('recall')?Math.round(M[k]*100)+'%':(k=='passed'?M.passed+'/'+M.cases:M[k])}</b></div>`).join('');
+ const pick=document.getElementById('pick');
+ d.results.forEach((r,i)=>pick.add(new Option(r.id,i)));
+ const esc=s=>s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+ const draw=()=>{const r=d.results[pick.value];document.getElementById('chat').innerHTML=r.transcript.map(t=>
+  `<div class="u">${esc(t.user)}</div><div class="a">${esc(t.agent)}<div class="meta">tools: ${t.tools.join(', ')||'none'} · ${t.latency_ms} ms ${t.escalation!='none'?'· <span class="esc">escalation: '+t.escalation+'</span>':''}</div></div>`).join('')};
+ pick.onchange=draw;draw();
+ document.getElementById('tbl').innerHTML='<tr><th>Case</th><th>Pass</th><th>Expected</th><th>Got</th><th>Resolved</th></tr>'+d.results.map(r=>`<tr><td>${r.id}</td><td>${r.pass?'✅':'❌'}</td><td>${r.expected.escalation}</td><td>${r.got.escalation}</td><td>${r.got.resolved}</td></tr>`).join('');
+});
+</script></body></html>
